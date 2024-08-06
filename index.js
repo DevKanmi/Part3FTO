@@ -68,18 +68,6 @@ app.get('/api/notes',(request,response) =>{
   })
   })
 
-app.get('/api/notes/:id',(request,response) =>{
-  const id = Number(request.params.id)
-  // console.log(id)
-  const note = notes.find(note => note.id === id)
-    // console.log(note.id, typeof note.id, id, typeof id, note.id === id)
-  // console.log(note)
-  if(note){
-    response.json(note)
-  }
-  else{
-    response.status(404).end() ///To fix when a number that is not in the array is called,this error is called
-  }
 
 app.delete('/api/notes/:id',(request,response)=>{
   const id =Number(request.params.id)
@@ -87,34 +75,56 @@ app.delete('/api/notes/:id',(request,response)=>{
   response.status(204).end() //error thrown if we try to access an element that has already been deleted
 })
 
-const generateId =() => {
-  const maxId = notes.length > 0
-    ? Math.max(...notes.map(n => n.id))
-    : 0
-  return maxId + 1
-}
 
-app.post('/api/notes', (request, response)=>{
+app.post('/api/notes', (request, respons, next)=>{
   const body = request.body
   
-  if(!body.content){
+  if(body.content === undefined){
     return response.status(400).json({
       error : "content missing"
     })
   }
 
-  const note = {
+  const note = new Note({
     content: body.content,
-    important: Boolean(body.important) || false,
-    id: generateId(),
+    important: (body.important) || false,
+ })
+
+ note.save().then(savedNote =>{
+  response.json(savedNote)
+ })
+ .catch(error =>next(error))
+})
+
+app.get('api/notes/:id', (request, response) =>{
+  Note.findById(request.params.id).then(note =>{
+    if (note) {
+      response.json(note)
+    }
+    else {
+        response.status(404).end()  // if the request(Note) does not exist in the database, return this
+    }
+  })
+  .catch(error=> next(error))
+})
+
+const errorHandler = (error, request, response, next) =>{
+  console.error(error.message)
+
+  if (error.name === 'CastError'){
+    return response.status(400).send({error: 'Malformatted id'})
   }
 
-  notes = notes.concat(note)
+  else if(error.name ==="ValidationError"){
+    return response.status(400).json({error: error.message})
+  }
 
-  response.json(note)
-})
+  next(error)
+}
 
-})
+app.use(errorHandler)
+
+
 const PORT = process.env.PORT
 app.listen(PORT,()=>{
   console.log(`server running on port ${PORT}`)
